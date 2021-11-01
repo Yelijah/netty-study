@@ -78,7 +78,6 @@ public class NioServer {
     }
 
     public static void startSelectorNoBlockServer() {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
         try (ServerSocketChannel server = ServerSocketChannel.open()) {
             server.bind(new InetSocketAddress(9999));
             server.configureBlocking(false);
@@ -102,8 +101,10 @@ public class NioServer {
                         iterator.remove();
                         //给客户端设置非阻塞，且将通道的读事件也注册到selector中
                         channel.configureBlocking(false);
-                        channel.register(selector, SelectionKey.OP_READ);
+                        //为通道创建单独bytebuffer，作为附件，避免多个channel共用一个bytebuffer
+                        channel.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(16));
                     } else if (key.isReadable()) {
+                        ByteBuffer buffer = (ByteBuffer) key.attachment();
                         //此key绑定的是客户端channel
                         SocketChannel channel = (SocketChannel) key.channel();
                         int c = 0;
