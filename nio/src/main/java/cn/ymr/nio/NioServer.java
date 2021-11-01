@@ -106,21 +106,17 @@ public class NioServer {
                     } else if (key.isReadable()) {
                         //此key绑定的是客户端channel
                         SocketChannel channel = (SocketChannel) key.channel();
-                        int c;
+                        int c = 0;
                         try {
                             c = channel.read(buffer);
                         } catch (IOException e) {
                             //异常断开连接时，抛出IOException
-                            System.out.println(channel.getRemoteAddress().toString() + " close exception.");
-                            key.channel();
-                            channel.close();
-                            iterator.remove();
-                            continue;
+                            e.printStackTrace();
                         }
                         // 正常断开连接时，客户端会向服务器发送一个写事件，此时read的返回值为-1
-                        if (c == -1) {
+                        if (c == -1 || c == 0) {
                             System.out.println(channel.getRemoteAddress().toString() + " close.");
-                            key.channel();
+                            key.cancel();
                             channel.close();
                         } else {
                             System.out.println(channel.getRemoteAddress().toString() + " read:" + ByteBufferUtils.toString(buffer));
