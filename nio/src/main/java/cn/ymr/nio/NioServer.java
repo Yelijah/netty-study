@@ -3,14 +3,19 @@ package cn.ymr.nio;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Desc
@@ -21,7 +26,8 @@ import java.util.Set;
 public class NioServer {
     public static void main(String[] args) {
 //        startNoBlockServer();
-        startSelectorNoBlockServer();
+//        startSelectorNoBlockServer();
+        startWriteSelectorNoBlockServer();
     }
 
     public static void startBlockServer() {
@@ -123,6 +129,61 @@ public class NioServer {
                             System.out.println(channel.getRemoteAddress().toString() + " read:" + ByteBufferUtils.toString(buffer));
                         }
                         iterator.remove();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void startWriteSelectorNoBlockServer() {
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
+        try (ServerSocketChannel server = ServerSocketChannel.open()) {
+            server.bind(new InetSocketAddress(9999));
+            server.configureBlocking(false);
+            Selector selector = Selector.open();
+            server.register(selector, SelectionKey.OP_ACCEPT);
+            while (true) {
+                int ready = selector.select();
+                System.out.println(System.nanoTime() + " selector ready count:" + ready);
+                Set<SelectionKey> selectionKeys = selector.selectedKeys();
+                Iterator<SelectionKey> iterator = selectionKeys.iterator();
+                while (iterator.hasNext()) {
+                    SelectionKey key = iterator.next();
+                    if (key.isAcceptable()) {
+                        SocketChannel channel = server.accept();
+                        System.out.println("after connecting..." + channel.getRemoteAddress().toString());
+                        iterator.remove();
+
+                        ByteBuffer buffer = StandardCharsets.UTF_8.encode("aaaaaaaaaa");
+                        // 先执行一次Buffer->Channel的写入
+                        int write = channel.write(buffer);
+                        System.out.println("write size:" + write);
+                        // 定时三秒后，关注可写事件注册到Selector中，并将buffer添加到key的附件中
+                        executor.schedule(() -> {
+                            try {
+                                System.out.println("register write event!");
+                                buffer.rewind();    //读模式下重置标记，让其可以重新读
+                                channel.configureBlocking(false);
+                                //由于select和register都有锁，此时锁被select占用，直接register会等待，只有先唤醒，唤醒后当次select结果为0
+                                selector.wakeup();
+                                channel.register(selector, SelectionKey.OP_WRITE, buffer);
+                                System.out.println(System.nanoTime() + " register write event!");
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }, 3, TimeUnit.SECONDS);
+
+                    } else if (key.isWritable()) {
+                        SocketChannel channel = (SocketChannel) key.channel();
+                        ByteBuffer buffer = (ByteBuffer) key.attachment();
+                        int write = channel.write(buffer);
+                        System.out.println("write size:" + write);
+                        //光iterator.remove()没用，它并非是取消对事件的关注，只是对jdk的bug的修复
+                        iterator.remove();
+                        //此处必须还得取消对可写事件的关注，否则后续selectedKeys还是会获取到
+                        key.cancel();
                     }
                 }
             }
