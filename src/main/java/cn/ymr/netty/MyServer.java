@@ -2,8 +2,10 @@ package cn.ymr.netty;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
+import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
@@ -28,7 +30,7 @@ public class MyServer {
         new MyServer(port).start();
     }
 
-    private int port;
+    private final int port;
 
     public MyServer(int port) {
         this.port = port;
@@ -36,32 +38,29 @@ public class MyServer {
 
     public void start() throws InterruptedException {
         EventLoopGroup group = new NioEventLoopGroup();
-        MySharableServerChannelHandler sharableChannelHandler = new MySharableServerChannelHandler();
-        ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
-        executor.scheduleAtFixedRate(()-> {
-            System.out.println(sharableChannelHandler.getActiveCounts() + " " + sharableChannelHandler.getReceivedCounts());
-        }, 3, 3, TimeUnit.SECONDS);
-
+        ChannelHandler statisticChannelHandler = createStatisticsChannelHandler();
+        //自定义业务线程池loopGroup
+        EventLoopGroup busyTaskGroup = new DefaultEventLoopGroup();
         try{
             AtomicReference<ChannelPipeline> pipelineRef = new AtomicReference<>();
-            ServerBootstrap b = new ServerBootstrap();
-            b.group(group)
+            ServerBootstrap bootstrap = new ServerBootstrap();
+            bootstrap.group(group)
                     .channel(NioServerSocketChannel.class)
                     .localAddress(new InetSocketAddress(port))
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
-                            System.out.println(socketChannel.remoteAddress());
-                            if (pipelineRef.get() != null) {
-                                //每个channel都有各自的pipeline
-                                System.out.println(pipelineRef.get() == socketChannel.pipeline());
-                            }
+                            System.out.println(socketChannel.remoteAddress() + " channel init!");
+                            assert pipelineRef.get() != socketChannel.pipeline();
+
                             pipelineRef.set(socketChannel.pipeline());
-                            socketChannel.pipeline().addLast(sharableChannelHandler);
-                            socketChannel.pipeline().addLast(new MyServerChannelHandler());
+                            socketChannel.pipeline()
+                                    .addLast(new MyServerChannelHandler())
+                                    .addLast(busyTaskGroup, new MyBusyServerChannelHandler(5))
+                                    .addLast(statisticChannelHandler);
                         }
                     });
-            ChannelFuture future = b.bind().sync();
+            ChannelFuture future = bootstrap.bind().sync(); //sync阻塞线程，直到启动完成，否则是异步非阻塞的
             System.out.println("服务器启动完成~");
             future.channel().closeFuture().sync();
         } finally {
@@ -70,4 +69,12 @@ public class MyServer {
     }
 
 
+    private static ChannelHandler createStatisticsChannelHandler() {
+        MySharableServerChannelHandler sharableChannelHandler = new MySharableServerChannelHandler();
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
+        executor.scheduleAtFixedRate(()-> {
+            System.out.println(sharableChannelHandler.getActiveCounts() + " " + sharableChannelHandler.getReceivedCounts());
+        }, 5, 5, TimeUnit.SECONDS);
+        return sharableChannelHandler;
+    }
 }
