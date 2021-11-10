@@ -9,10 +9,10 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
  * @author Elijah
  * created on 2021-11-03
  */
-public class MyBusyServerChannelHandler extends ChannelInboundHandlerAdapter {
+public class MyServerBusyChannelHandler extends ChannelInboundHandlerAdapter {
     private int second = 1;
 
-    public MyBusyServerChannelHandler(int second) {
+    public MyServerBusyChannelHandler(int second) {
         this.second = second;
     }
 

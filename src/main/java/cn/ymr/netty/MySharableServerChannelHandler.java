@@ -1,6 +1,5 @@
 package cn.ymr.netty;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -32,7 +31,8 @@ public class MySharableServerChannelHandler extends ChannelInboundHandlerAdapter
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         receivedCounts++;
-        //最后一个Handler不能fire传递msg，否则报错计数器异常:io.netty.util.IllegalReferenceCountException: refCnt: 0, decrement: 1
+        //最后一个Handler如果触发fireChannelRead，则会在io.netty.channel.DefaultChannelPipeline.TailContext.channelRead中尝试释放ByteBuff;
+        //此时如果之前已经释放了ByteBuff(比如触发了flush)，则会报错计数器异常:io.netty.util.IllegalReferenceCountException: refCnt: 0, decrement: 1
 //        ctx.fireChannelRead((ByteBuf)msg);
     }
 

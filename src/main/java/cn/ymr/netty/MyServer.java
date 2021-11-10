@@ -39,6 +39,7 @@ public class MyServer {
     public void start() throws InterruptedException {
         EventLoopGroup group = new NioEventLoopGroup();
         ChannelHandler statisticChannelHandler = createStatisticsChannelHandler();
+        ChannelHandler statisticOutHandler = new MyServerStatisticOutChannelHandler();
         //自定义业务线程池loopGroup
         EventLoopGroup busyTaskGroup = new DefaultEventLoopGroup();
         try{
@@ -55,9 +56,11 @@ public class MyServer {
 
                             pipelineRef.set(socketChannel.pipeline());
                             socketChannel.pipeline()
+                                    .addLast(new MyServerOutChannelHandler())
                                     .addLast(new MyServerChannelHandler())
-                                    .addLast(busyTaskGroup, new MyBusyServerChannelHandler(5))
-                                    .addLast(statisticChannelHandler);
+                                    .addLast(busyTaskGroup, new MyServerBusyChannelHandler(5))
+                                    .addLast(statisticChannelHandler)
+                                    .addLast(statisticOutHandler);
                         }
                     });
             ChannelFuture future = bootstrap.bind().sync(); //sync阻塞线程，直到启动完成，否则是异步非阻塞的

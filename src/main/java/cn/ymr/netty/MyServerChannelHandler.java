@@ -16,17 +16,22 @@ import java.nio.charset.StandardCharsets;
 public class MyServerChannelHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        System.out.println(this);
         ByteBuf buf = (ByteBuf) msg;
-        System.out.println("server received:" + buf.toString(StandardCharsets.UTF_8));
+        System.out.println("服务器接收数据:" + buf.toString(StandardCharsets.UTF_8));
+        /**
+         * 1.flush会释放byteBuf，所以引用计数器为0
+         * 2.ctx.write会从所在handler向前找最近的OutboundHandler，在次handler后的不会触发； 而channel.write会从最后的OutboundHandler一直往前触发
+         */
         ctx.writeAndFlush(buf);
+        assert buf.refCnt() == 0;
         //触发下个Handler执行，类似于filterChain.doFilter
         ctx.fireChannelRead(msg);
     }
 
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-        ctx.writeAndFlush(Unpooled.copiedBuffer("服务器已收到消息，向你回执\n", StandardCharsets.UTF_8));
+        System.out.println("服务器读取消息完毕！");
+        ctx.channel().writeAndFlush(Unpooled.copiedBuffer("服务器已收到消息，向你回执\n", StandardCharsets.UTF_8));
         ctx.fireChannelReadComplete();
     }
 
