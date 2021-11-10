@@ -1,6 +1,7 @@
 package cn.ymr.netty.codec;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.AdaptiveRecvByteBufAllocator;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
@@ -11,11 +12,11 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.DelimiterBasedFrameDecoder;
 import io.netty.handler.codec.LineBasedFrameDecoder;
-import io.netty.util.concurrent.Future;
-import io.netty.util.concurrent.GenericFutureListener;
 
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -30,7 +31,8 @@ public class CodecServer {
     public static void main(String[] args) throws Exception {
 //        startServer(new ServerHandler()); // 粘包测试
 //        startHalfPack();
-        startWithLineBasedFrameDecoder();
+//        startWithLineBasedFrameDecoder();
+        startWithDelimiterBasedFrameDecoder();
     }
 
     //半包测试
@@ -49,6 +51,21 @@ public class CodecServer {
         startServer(options, pipeline -> pipeline.addLast(
                 new LineBasedFrameDecoder(65536),
                 new ServerHandler()));
+    }
+
+    private static void startWithDelimiterBasedFrameDecoder() throws Exception {
+        Map<ChannelOption, Object> options = new HashMap<>();
+        options.put(ChannelOption.RCVBUF_ALLOCATOR, new AdaptiveRecvByteBufAllocator(16, 16, 64));
+        startServer(options, pipeline -> {
+            ByteBuf buf = pipeline.channel().alloc().buffer();
+            buf.writeCharSequence("-_-\n", StandardCharsets.UTF_8);
+            ByteBuf buf1 = pipeline.channel().alloc().buffer();
+            buf1.writeCharSequence("-_-\r\n", StandardCharsets.UTF_8);
+            pipeline.addLast(
+                    new DelimiterBasedFrameDecoder(65536, buf, buf1),
+                    new ServerHandler()
+            );
+        });
     }
 
     private static void startServer(Consumer<ChannelPipeline> pipelineConsumer) throws Exception{

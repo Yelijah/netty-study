@@ -23,7 +23,8 @@ import java.util.function.Consumer;
 public class CodecClient {
     public static void main(String[] args) throws Exception {
 //        startHalfPack();
-        startWithLine();
+//        startWithLine();
+        startWithDelimiter();
     }
 
     private static void startStickPack() throws Exception{
@@ -62,6 +63,20 @@ public class CodecClient {
         });
     }
 
+    private static void startWithDelimiter() throws Exception {
+        startClient(ctx -> {
+            ByteBuf buf = ctx.alloc().buffer();
+            for (int i = 0; i < 10; i++) {
+                buf.writeCharSequence("aaaabbbccc", StandardCharsets.UTF_8);
+                ByteBuf buffer = ctx.alloc().buffer();
+                buffer.writeCharSequence("aaaabbbccc-_-\n", StandardCharsets.UTF_8);
+                ctx.writeAndFlush(buffer);
+            }
+            buf.writeCharSequence("-_-\n", StandardCharsets.UTF_8);
+            ctx.writeAndFlush(buf);
+        });
+    }
+
     private static void startClient(Consumer<ChannelHandlerContext> consumer, ChannelHandler... handlers) throws Exception{
         NioEventLoopGroup group = new NioEventLoopGroup();
         try {
@@ -85,7 +100,8 @@ public class CodecClient {
                         }
                     });
             ChannelFuture future = bootstrap.connect().sync();
-            future.channel().closeFuture().sync();
+            Thread.sleep(3000);
+            future.channel().close().sync();
         } finally {
             group.shutdownGracefully().sync();
         }
