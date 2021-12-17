@@ -56,6 +56,7 @@ public class MyServer {
 
                             pipelineRef.set(socketChannel.pipeline());
                             socketChannel.pipeline()
+                                    //write所在ChannelHandler（in or out）之前的OutChannelHandler才能拦截到write事件
                                     .addLast(new MyServerOutChannelHandler())
                                     .addLast(new MyServerChannelHandler())
                                     .addLast(busyTaskGroup, new MyServerBusyChannelHandler(5))

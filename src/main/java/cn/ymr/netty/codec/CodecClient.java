@@ -2,6 +2,7 @@ package cn.ymr.netty.codec;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -12,6 +13,8 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 /**
@@ -73,6 +76,21 @@ public class CodecClient {
                 ctx.writeAndFlush(buffer);
             }
             buf.writeCharSequence("-_-\n", StandardCharsets.UTF_8);
+
+            ExecutorService executor = Executors.newFixedThreadPool(10);
+            for (int i = 0; i < 10; i++) {
+                int c = i + 'a';
+                executor.submit(() -> {
+                    ByteBuf buf1 = Unpooled.buffer();
+                    for (int j = 0; j < 100; j++) {
+                        buf1.writeByte(c);
+                    }
+                    buf1.writeCharSequence("-_-\n", StandardCharsets.UTF_8);
+                    //线程安全的，所以不会出现交叉的字符出现
+                    ctx.channel().writeAndFlush(buf1);
+                });
+            }
+            executor.shutdown();
             ctx.writeAndFlush(buf);
         });
     }
